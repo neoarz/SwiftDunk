@@ -34,7 +34,7 @@ public struct Certificate: Sendable, Identifiable, Codable {
     /// The certificate's Apple platform, when supplied.
     public let platform: String?
 
-    /// Detailed certificate-type metadata, when supplied.
+    /// Certificate-type metadata. Decoding also accepts `certificateType`; encoding uses `certType`.
     public let type: CertificateType?
 
     /// The DER-encoded X.509 certificate, when supplied.
@@ -58,6 +58,10 @@ public struct Certificate: Sendable, Identifiable, Codable {
         case content = "certContent"
         case machineID = "machineId"
         case machineName
+    }
+
+    private enum AlternateCodingKeys: String, CodingKey {
+        case type = "certificateType"
     }
 
     /// Creates a certificate value.
@@ -86,9 +90,32 @@ public struct Certificate: Sendable, Identifiable, Codable {
         self.machineID = machineID
         self.machineName = machineName
     }
+
+    /// Decodes a certificate while accepting either metadata key used by Apple.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(ID.self, forKey: .id)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        serialNumber = try container.decode(String.self, forKey: .serialNumber)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        statusCode = try container.decodeIfPresent(Int.self, forKey: .statusCode)
+        expirationDate = try container.decode(Date.self, forKey: .expirationDate)
+        platform = try container.decodeIfPresent(String.self, forKey: .platform)
+        if container.contains(.type) {
+            type = try container.decodeIfPresent(CertificateType.self, forKey: .type)
+        } else {
+            let alternate = try decoder.container(keyedBy: AlternateCodingKeys.self)
+            type = try alternate.decodeIfPresent(CertificateType.self, forKey: .type)
+        }
+        content = try container.decodeIfPresent(Data.self, forKey: .content)
+        machineID = try container.decodeIfPresent(String.self, forKey: .machineID)
+        machineName = try container.decodeIfPresent(String.self, forKey: .machineName)
+    }
 }
 
 /// Metadata describing an Apple certificate type.
+///
+/// Decoding accepts `maxActive` and `maxActiveCerts`; encoding uses `maxActive`.
 public struct CertificateType: Codable, Sendable {
     /// Apple's certificate-type display identifier.
     public let displayID: String?
@@ -102,6 +129,9 @@ public struct CertificateType: Codable, Sendable {
     /// The permission category associated with the type.
     public let permissionType: String?
 
+    /// Apple's distribution type, reported separately from `distributionMethod`.
+    public let distributionType: String?
+
     /// The certificate's distribution method.
     public let distributionMethod: String?
 
@@ -111,7 +141,7 @@ public struct CertificateType: Codable, Sendable {
     /// The number of overlap days Apple allows during renewal.
     public let overlapDays: Int?
 
-    /// The maximum number of active certificates.
+    /// Apple's limit for active certificates of this type.
     public let maximumActive: Int?
 
     enum CodingKeys: String, CodingKey {
@@ -119,10 +149,15 @@ public struct CertificateType: Codable, Sendable {
         case name
         case platform
         case permissionType
+        case distributionType
         case distributionMethod
         case ownerType
         case overlapDays = "daysOverlap"
         case maximumActive = "maxActive"
+    }
+
+    private enum AlternateCodingKeys: String, CodingKey {
+        case maximumActive = "maxActiveCerts"
     }
 
     /// Creates certificate-type metadata.
@@ -131,6 +166,7 @@ public struct CertificateType: Codable, Sendable {
         name: String? = nil,
         platform: String? = nil,
         permissionType: String? = nil,
+        distributionType: String? = nil,
         distributionMethod: String? = nil,
         ownerType: String? = nil,
         overlapDays: Int? = nil,
@@ -140,10 +176,30 @@ public struct CertificateType: Codable, Sendable {
         self.name = name
         self.platform = platform
         self.permissionType = permissionType
+        self.distributionType = distributionType
         self.distributionMethod = distributionMethod
         self.ownerType = ownerType
         self.overlapDays = overlapDays
         self.maximumActive = maximumActive
+    }
+
+    /// Decodes certificate-type metadata while accepting either maximum-count key.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        displayID = try container.decodeIfPresent(String.self, forKey: .displayID)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        platform = try container.decodeIfPresent(String.self, forKey: .platform)
+        permissionType = try container.decodeIfPresent(String.self, forKey: .permissionType)
+        distributionType = try container.decodeIfPresent(String.self, forKey: .distributionType)
+        distributionMethod = try container.decodeIfPresent(String.self, forKey: .distributionMethod)
+        ownerType = try container.decodeIfPresent(String.self, forKey: .ownerType)
+        overlapDays = try container.decodeIfPresent(Int.self, forKey: .overlapDays)
+        if container.contains(.maximumActive) {
+            maximumActive = try container.decodeIfPresent(Int.self, forKey: .maximumActive)
+        } else {
+            let alternate = try decoder.container(keyedBy: AlternateCodingKeys.self)
+            maximumActive = try alternate.decodeIfPresent(Int.self, forKey: .maximumActive)
+        }
     }
 }
 

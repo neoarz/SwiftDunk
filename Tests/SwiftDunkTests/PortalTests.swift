@@ -171,6 +171,16 @@ struct PortalTests {
         let certificates = try await session.certificates(teamID: teamID)
         #expect(certificates.first?.serialNumber == PortalFixtures.serialNumber)
         #expect(certificates.first?.content == Data([0x30, 0x01]))
+        let certificateType = try #require(certificates.first?.type)
+        #expect(certificateType.displayID == "DEVELOPMENT")
+        #expect(certificateType.name == "Apple Development")
+        #expect(certificateType.platform == "ios")
+        #expect(certificateType.permissionType == "development")
+        #expect(certificateType.distributionType == PortalFixtures.certificateDistributionType)
+        #expect(certificateType.distributionMethod == PortalFixtures.certificateDistributionMethod)
+        #expect(certificateType.ownerType == "team")
+        #expect(certificateType.overlapDays == 30)
+        #expect(certificateType.maximumActive == PortalFixtures.certificateTypeMaximumActive)
         try await session.revokeCertificate(
             teamID: teamID,
             serialNumber: PortalFixtures.serialNumber
@@ -182,6 +192,10 @@ struct PortalTests {
         )
         #expect(certificateRequest.certificateID.rawValue == PortalFixtures.certificateID)
         #expect(certificateRequest.serialNumber == PortalFixtures.serialNumber)
+        let requestedType = try #require(certificateRequest.certificateType)
+        #expect(requestedType.distributionType == PortalFixtures.certificateDistributionType)
+        #expect(requestedType.distributionMethod == PortalFixtures.certificateDistributionMethod)
+        #expect(requestedType.maximumActive == PortalFixtures.certificateTypeMaximumActive)
 
         let capabilities = try await session.capabilities(teamID: teamID)
         #expect(capabilities.first?.id == "PUSH_NOTIFICATIONS")

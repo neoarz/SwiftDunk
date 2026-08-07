@@ -10,6 +10,9 @@ enum PortalFixtures {
     static let groupIdentifier = "group.com.example.app"
     static let certificateID = "CERT123"
     static let serialNumber = "0123456789ABCDEF"
+    static let certificateDistributionType = "development"
+    static let certificateDistributionMethod = "limited"
+    static let certificateTypeMaximumActive = 3
     static let profileID = "PROFILE123"
     static let profileUUID = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
     static let expirationDate = Date(timeIntervalSince1970: 1_900_000_000)
@@ -175,6 +178,7 @@ enum PortalFixtures {
                     "status": .string("Issued"),
                     "statusCode": .integer(1),
                     "expirationDate": .date(expirationDate),
+                    "certType": certificateType(maximumKey: "maxActive"),
                     "certContent": .data(Data([0x30, 0x01])),
                     "machineId": .string("MACHINE123"),
                     "machineName": .string("SwiftDunk"),
@@ -194,6 +198,7 @@ enum PortalFixtures {
                 "dateCreated": .date(expirationDate.addingTimeInterval(-30)),
                 "machineId": .string("MACHINE123"),
                 "machineName": .string("SwiftDunk"),
+                "certificateType": certificateType(maximumKey: "maxActiveCerts"),
             ])
         ])
     }
@@ -333,6 +338,20 @@ enum PortalFixtures {
             "identifier": .string(groupIdentifier),
             "status": .string("active"),
             "prefix": .string(teamID),
+        ])
+    }
+
+    private static func certificateType(maximumKey: String) -> PlistValue {
+        .dictionary([
+            "certificateTypeDisplayId": .string("DEVELOPMENT"),
+            "name": .string("Apple Development"),
+            "platform": .string("ios"),
+            "permissionType": .string("development"),
+            "distributionType": .string(certificateDistributionType),
+            "distributionMethod": .string(certificateDistributionMethod),
+            "ownerType": .string("team"),
+            "daysOverlap": .integer(30),
+            maximumKey: .integer(certificateTypeMaximumActive),
         ])
     }
 
