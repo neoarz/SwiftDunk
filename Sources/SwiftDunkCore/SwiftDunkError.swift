@@ -22,6 +22,9 @@ public struct SwiftDunkError: Error, Sendable {
         /// GrandSlam returned its `ec` error code and accompanying `em` message.
         case grandSlam(code: Int, message: String)
 
+        /// Apple rejected an application-token request inside the decrypted response.
+        case appTokenRejected(statusCode: Int)
+
         /// The GrandSlam server proof did not match the locally computed proof.
         case srpVerificationFailed
 
@@ -110,6 +113,8 @@ extension SwiftDunkError: LocalizedError {
             "The server selected unsupported SRP protocol '\(protocolName)'."
         case .grandSlam(let code, let message):
             "GrandSlam error \(code): \(message)"
+        case .appTokenRejected(let statusCode):
+            "Apple rejected the application-token request with status \(statusCode)."
         case .srpVerificationFailed:
             "The GrandSlam server proof could not be verified."
         case .invalidTwoFactorCode:

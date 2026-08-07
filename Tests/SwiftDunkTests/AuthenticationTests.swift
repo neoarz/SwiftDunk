@@ -228,6 +228,23 @@ struct AuthenticationTests {
         }
     }
 
+    @Test("A missing GrandSlam error code is rejected")
+    func missingGrandSlamErrorCode() async {
+        let scenario = GrandSlamScenario(
+            authenticationTypes: [nil],
+            omitGSAErrorCode: true
+        )
+        let session = makeSession(scenario: scenario)
+
+        await #expect {
+            try await session.begin(password: SRPVectors.passwordDerivation.password)
+        } throws: { error in
+            (error as? SwiftDunkError)?.code
+                == .malformedResponse(key: "ec", expected: "an integer")
+        }
+        #expect(await scenario.gsaCompleteCount == 0)
+    }
+
     @Test(
         "GrandSlam errors are preserved from root and Status dictionaries",
         arguments: [

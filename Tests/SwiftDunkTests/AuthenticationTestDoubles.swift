@@ -15,6 +15,7 @@ actor GrandSlamScenario {
     private let verificationStatus: Int
     private let failFirstRerun: Bool
     private let omitInitSalt: Bool
+    private let omitGSAErrorCode: Bool
     private let gsaError: TestGSAError?
     private let gsaStatusCode: Int
     private let blockedRequest: AuthenticationRequestKind?
@@ -53,6 +54,7 @@ actor GrandSlamScenario {
         verificationStatus: Int = 200,
         failFirstRerun: Bool = false,
         omitInitSalt: Bool = false,
+        omitGSAErrorCode: Bool = false,
         gsaError: TestGSAError? = nil,
         gsaStatusCode: Int = 200,
         blockedRequest: AuthenticationRequestKind? = nil,
@@ -74,6 +76,7 @@ actor GrandSlamScenario {
         self.verificationStatus = verificationStatus
         self.failFirstRerun = failFirstRerun
         self.omitInitSalt = omitInitSalt
+        self.omitGSAErrorCode = omitGSAErrorCode
         self.gsaError = gsaError
         self.gsaStatusCode = gsaStatusCode
         self.blockedRequest = blockedRequest
@@ -331,6 +334,7 @@ actor GrandSlamScenario {
         #expect(request.header("Loc") == "en_US")
         #expect(request.header("X-Apple-App-Info") == "com.apple.gs.xcode.auth")
         #expect(request.header("X-Xcode-Version") == "11.2 (11B41)")
+        #expect(request.header("X-Apple-I-MD-RINFO") == "17106176")
         #expect(
             request.header("X-Mme-Client-Info")
                 == "<TestMac> <macOS;1> <com.apple.AuthKit/1 (com.apple.dt.Xcode/3594.4.19)>"
@@ -371,10 +375,10 @@ actor GrandSlamScenario {
     }
 
     private func successStatus(_ authenticationType: String?) -> PlistValue {
-        var status: [String: PlistValue] = [
-            "ec": .integer(0),
-            "em": .string("OK"),
-        ]
+        var status: [String: PlistValue] = ["em": .string("OK")]
+        if !omitGSAErrorCode {
+            status["ec"] = .integer(0)
+        }
         if let authenticationType {
             status["au"] = .string(authenticationType)
         }

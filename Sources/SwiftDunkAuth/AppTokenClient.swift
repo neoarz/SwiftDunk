@@ -94,6 +94,15 @@ struct AppTokenClient: Sendable {
             key: "et",
             expected: "a decrypted token property list"
         )
+        if let statusValue = root[AuthConstants.AppToken.statusCode] {
+            let statusCode = try requireInteger(
+                statusValue,
+                key: AuthConstants.AppToken.statusCode
+            )
+            guard statusCode == AuthConstants.AppToken.successStatusCode else {
+                throw SwiftDunkError(code: .appTokenRejected(statusCode: statusCode))
+            }
+        }
         let tokens = try root.requireDictionary("t")
         guard let tokenValues = tokens[name]?.dictionary else {
             throw SwiftDunkError(

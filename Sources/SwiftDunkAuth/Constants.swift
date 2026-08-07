@@ -79,6 +79,8 @@ enum AuthConstants {
 
     enum AppToken {
         static let prefix = "com.apple.gs."
+        static let statusCode = "status-code"
+        static let successStatusCode = 200
         static let checksumPrefix = Data("apptokens".utf8)
         static let encryptedHeader = Data("XYZ".utf8)
         static let nonceLength = 16

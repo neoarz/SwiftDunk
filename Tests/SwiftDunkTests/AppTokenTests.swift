@@ -6,7 +6,7 @@ import Testing
 
 @Suite("GrandSlam application tokens")
 struct AppTokenTests {
-    @Test("A golden et envelope decrypts and preserves server timestamps")
+    @Test("A golden et envelope without status-code remains valid")
     func decryptsGoldenToken() async throws {
         let scenario = AppTokenScenario(
             encryptedToken: try TestData.hex(AppTokenVectors.encryptedToken)
@@ -30,6 +30,56 @@ struct AppTokenTests {
                 )
         )
         #expect(await scenario.requestCount == 1)
+    }
+
+    @Test("A successful inner status-code is accepted")
+    func acceptsSuccessfulStatusCode() async throws {
+        let scenario = AppTokenScenario(
+            encryptedToken: try encryptedToken(
+                statusCode: .integer(200),
+                duration: nil,
+                expiry: .integer(AppTokenVectors.expiryMilliseconds)
+            )
+        )
+
+        let token = try await makeAccount(scenario: scenario).appToken("xcode.auth")
+
+        #expect(token.value == AppTokenVectors.tokenValue)
+    }
+
+    @Test("A rejected inner status-code is surfaced")
+    func rejectsFailedStatusCode() async throws {
+        let scenario = AppTokenScenario(
+            encryptedToken: try encryptedToken(
+                statusCode: .integer(500),
+                duration: nil,
+                expiry: .integer(AppTokenVectors.expiryMilliseconds)
+            )
+        )
+
+        await #expect {
+            try await makeAccount(scenario: scenario).appToken("xcode.auth")
+        } throws: { error in
+            (error as? SwiftDunkError)?.code == .appTokenRejected(statusCode: 500)
+        }
+    }
+
+    @Test("A malformed inner status-code names the wire key")
+    func rejectsMalformedStatusCode() async throws {
+        let scenario = AppTokenScenario(
+            encryptedToken: try encryptedToken(
+                statusCode: .string("success"),
+                duration: nil,
+                expiry: .integer(AppTokenVectors.expiryMilliseconds)
+            )
+        )
+
+        await #expect {
+            try await makeAccount(scenario: scenario).appToken("xcode.auth")
+        } throws: { error in
+            (error as? SwiftDunkError)?.code
+                == .malformedResponse(key: "status-code", expected: "an integer")
+        }
     }
 
     @Test("An already-normalized application name is not prefixed twice")
@@ -123,6 +173,7 @@ struct AppTokenTests {
     }
 
     private func encryptedToken(
+        statusCode: PlistValue? = nil,
         duration: PlistValue?,
         expiry: PlistValue?
     ) throws -> Data {
@@ -135,13 +186,13 @@ struct AppTokenTests {
 
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .binary
-        let plaintext = try encoder.encode(
-            PlistValue.dictionary([
-                "t": .dictionary([
-                    AppTokenVectors.applicationName: .dictionary(token)
-                ])
+        var root: [String: PlistValue] = [
+            "t": .dictionary([
+                AppTokenVectors.applicationName: .dictionary(token)
             ])
-        )
+        ]
+        root["status-code"] = statusCode
+        let plaintext = try encoder.encode(PlistValue.dictionary(root))
         let header = Data("XYZ".utf8)
         let nonceData = Data((0..<16).map(UInt8.init))
         let sealed = try AES.GCM.seal(
