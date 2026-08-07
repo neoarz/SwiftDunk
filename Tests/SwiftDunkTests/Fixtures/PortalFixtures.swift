@@ -293,6 +293,9 @@ enum PortalFixtures {
             "features": .dictionary([
                 "push": .boolean(true),
                 "gameCenter": .boolean(false),
+                "dataProtection": .string("complete"),
+                "cloudKitVersion": .integer(1),
+                "APG3427HIY": .boolean(true),
             ]),
             "enabledFeatures": .array([.string("PUSH_NOTIFICATIONS")]),
             "expirationDate": .date(expirationDate),

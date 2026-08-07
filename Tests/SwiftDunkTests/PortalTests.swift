@@ -114,6 +114,10 @@ struct PortalTests {
         let appIDs = try await session.appIDs(teamID: teamID)
         #expect(appIDs.first?.identifier == PortalFixtures.appIdentifier)
         #expect(appIDs.first?.features?.pushNotifications == true)
+        #expect(appIDs.first?.features?.gameCenter == false)
+        #expect(appIDs.first?.features?.dataProtection == "complete")
+        #expect(appIDs.first?.features?.cloudKitVersion == 1)
+        #expect(appIDs.first?.features?["APG3427HIY"]?.boolean == true)
         #expect(appIDs.first?.expirationDate == PortalFixtures.expirationDate)
         let inventory = try await session.appIDInventory(teamID: teamID)
         #expect(inventory.maximumQuantity == 10)
@@ -133,7 +137,14 @@ struct PortalTests {
         _ = try await session.updateLegacyFeatures(
             teamID: teamID,
             appIDID: appIDID,
-            features: ["push": .boolean(true)]
+            features: [
+                "push": .boolean(true),
+                "APG3427HIY": .boolean(true),
+                "futureSettings": .dictionary([
+                    "mode": .string("beta"),
+                    "levels": .array([.integer(1), .integer(2)]),
+                ]),
+            ]
         )
         try await session.deleteAppID(teamID: teamID, appIDID: appIDID)
 
@@ -301,6 +312,134 @@ struct PortalTests {
         #expect(inventory.appIDs.first?.expirationDate == nil)
         #expect(inventory.maximumQuantity == nil)
         #expect(inventory.availableQuantity == nil)
+    }
+
+    @Test("App ID features preserve unknown fields losslessly")
+    func appIDFeaturePreservation() async throws {
+        let features: [String: PlistValue] = [
+            "push": .boolean(true),
+            "dataProtection": .string("complete"),
+            "cloudKitVersion": .integer(2),
+            "HK421J6T7P": .boolean(true),
+            "unknownMode": .string("beta"),
+            "unknownLimit": .integer(42),
+            "unknownList": .array([.string("a"), .integer(1)]),
+            "unknownSettings": .dictionary([
+                "enabled": .boolean(true),
+                "thresholds": .array([.real(0.5)]),
+            ]),
+            "unknownBlob": .data(Data([0x01, 0x02])),
+            "unknownDate": .date(PortalFixtures.expirationDate),
+            "FEATURE_SWIFTDUNK_HAS_NEVER_SEEN": .boolean(false),
+        ]
+        let session = try await appIDListSession(features: .dictionary(features))
+
+        let decoded = try await session.appIDs(
+            teamID: Team.ID(rawValue: PortalFixtures.teamID)
+        )
+        let decodedFeatures = try #require(decoded.first?.features)
+
+        #expect(decodedFeatures.pushNotifications == true)
+        #expect(decodedFeatures.dataProtection == "complete")
+        #expect(decodedFeatures.cloudKitVersion == 2)
+        #expect(decodedFeatures.values == features)
+
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .xml
+        let reencoded = try PropertyListDecoder().decode(
+            AppIDFeatures.self,
+            from: encoder.encode(decodedFeatures)
+        )
+        #expect(reencoded.values == features)
+    }
+
+    @Test("Every typed feature accessor maps to its wire key")
+    func typedFeatureAccessorCompatibility() throws {
+        let features = AppIDFeatures(
+            pushNotifications: true,
+            iCloud: false,
+            inAppPurchase: true,
+            gameCenter: false,
+            wallet: true,
+            dataProtection: "complete",
+            homeKit: true,
+            cloudKitVersion: 2
+        )
+
+        #expect(features.pushNotifications == true)
+        #expect(features.iCloud == false)
+        #expect(features.inAppPurchase == true)
+        #expect(features.gameCenter == false)
+        #expect(features.wallet == true)
+        #expect(features.dataProtection == "complete")
+        #expect(features.homeKit == true)
+        #expect(features.cloudKitVersion == 2)
+        #expect(
+            features.values == [
+                "push": .boolean(true),
+                "iCloud": .boolean(false),
+                "inAppPurchase": .boolean(true),
+                "gameCenter": .boolean(false),
+                "passbook": .boolean(true),
+                "dataProtection": .string("complete"),
+                "homeKit": .boolean(true),
+                "cloudKitVersion": .integer(2),
+            ])
+
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .xml
+        let decoded = try PropertyListDecoder().decode(
+            AppIDFeatures.self,
+            from: encoder.encode(features)
+        )
+        #expect(decoded.values == features.values)
+    }
+
+    @Test("Empty and missing App ID feature dictionaries decode distinctly")
+    func emptyAndMissingAppIDFeatures() async throws {
+        let session = try await appIDListSession(
+            appIDs: [
+                .dictionary([
+                    "appIdId": .string("APP-NO-FEATURES"),
+                    "identifier": .string("com.example.none"),
+                ]),
+                .dictionary([
+                    "appIdId": .string("APP-EMPTY-FEATURES"),
+                    "identifier": .string("com.example.empty"),
+                    "features": .dictionary([:]),
+                ]),
+            ]
+        )
+
+        let decoded = try await session.appIDs(
+            teamID: Team.ID(rawValue: PortalFixtures.teamID)
+        )
+
+        #expect(decoded.count == 2)
+        #expect(decoded.first?.features == nil)
+        let empty = try #require(decoded.last?.features)
+        #expect(empty.values.isEmpty)
+    }
+
+    @Test("A malformed App ID feature container is a typed error")
+    func malformedAppIDFeatures() async throws {
+        let session = try await appIDListSession(features: .string("not-a-dictionary"))
+
+        await #expect {
+            try await session.appIDs(teamID: Team.ID(rawValue: PortalFixtures.teamID))
+        } throws: { error in
+            guard let error = error as? SwiftDunkError,
+                error.code
+                    == .malformedResponse(
+                        key: "response",
+                        expected: "the QH response for /QH65B2/ios/listAppIds.action"
+                    ),
+                let decodingError = error.underlyingError as? DecodingError
+            else {
+                return false
+            }
+            return decodingErrorPath(decodingError).contains("features")
+        }
     }
 
     @Test("QH pagination rejects a page number that cannot be incremented")
@@ -482,6 +621,52 @@ struct PortalTests {
             ),
             anisette: .mock,
             transport: transport(for: scenario)
+        )
+    }
+
+    private func decodingErrorPath(_ error: DecodingError) -> [String] {
+        switch error {
+        case .typeMismatch(_, let context), .valueNotFound(_, let context),
+            .keyNotFound(_, let context), .dataCorrupted(let context):
+            return context.codingPath.map(\.stringValue)
+        @unknown default:
+            return []
+        }
+    }
+
+    private func appIDListSession(features: PlistValue) async throws -> DeveloperSession {
+        try await appIDListSession(
+            appIDs: [
+                .dictionary([
+                    "appIdId": .string(PortalFixtures.appIDID),
+                    "identifier": .string(PortalFixtures.appIdentifier),
+                    "features": features,
+                ])
+            ]
+        )
+    }
+
+    private func appIDListSession(appIDs: [PlistValue]) async throws -> DeveloperSession {
+        let response = try PropertyListEncoder().encode(
+            PlistValue.dictionary([
+                "resultCode": .integer(0),
+                "appIds": .array(appIDs),
+            ])
+        )
+        let transport = MockTransport { request in
+            if request.url.path.hasSuffix("/listTeams.action") {
+                return HTTPResponse(statusCode: 200, body: try PortalFixtures.teams())
+            }
+            return HTTPResponse(statusCode: 200, body: response)
+        }
+        return try await DeveloperSession(
+            restoring: StoredSession(
+                appleID: "test@example.com",
+                adsid: "1234567890",
+                xcodeGSToken: "fixture-xcode-token"
+            ),
+            anisette: .mock,
+            transport: transport
         )
     }
 

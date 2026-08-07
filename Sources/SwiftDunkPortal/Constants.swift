@@ -72,6 +72,17 @@ enum PortalConstants {
         static let machineName = "machineName"
     }
 
+    enum FeatureKey {
+        static let push = "push"
+        static let iCloud = "iCloud"
+        static let inAppPurchase = "inAppPurchase"
+        static let gameCenter = "gameCenter"
+        static let passbook = "passbook"
+        static let dataProtection = "dataProtection"
+        static let homeKit = "homeKit"
+        static let cloudKitVersion = "cloudKitVersion"
+    }
+
     enum V1 {
         static let get = "GET"
         static let bundleIDType = "bundleIds"

@@ -127,6 +127,14 @@ actor PortalScenario {
             try expectTeam(body)
             #expect(body["appIdId"]?.string == PortalFixtures.appIDID)
             #expect(body["push"]?.boolean == true)
+            #expect(body["APG3427HIY"]?.boolean == true)
+            #expect(
+                body["futureSettings"]
+                    == .dictionary([
+                        "mode": .string("beta"),
+                        "levels": .array([.integer(1), .integer(2)]),
+                    ])
+            )
             responseBody = try PortalFixtures.appIDResponse()
         case let path where path.hasSuffix("/ios/listApplicationGroups.action"):
             try expectTeam(body)

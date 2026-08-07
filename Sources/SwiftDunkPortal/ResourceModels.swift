@@ -1,4 +1,5 @@
 public import Foundation
+public import SwiftDunkCore
 
 /// A device registered with an Apple Developer Program team.
 public struct Device: Sendable, Identifiable, Codable {
@@ -98,7 +99,7 @@ public struct AppID: Sendable, Identifiable, Codable {
     /// Whether Apple reports this entry as a duplicate.
     public let isDuplicate: Bool?
 
-    /// Legacy QH capability state.
+    /// QH feature values, or `nil` when Apple omits the dictionary.
     public let features: AppIDFeatures?
 
     /// Apple's enabled feature identifiers, when supplied.
@@ -188,44 +189,66 @@ public struct AppIDInventory: Sendable {
     }
 }
 
-/// Legacy QH feature state attached to an App ID.
+/// Feature values returned with an App ID.
+///
+/// Unknown keys remain available through ``values``.
 public struct AppIDFeatures: Codable, Sendable {
-    /// Whether push notifications are enabled.
-    public let pushNotifications: Bool?
+    /// The feature dictionary returned by Apple.
+    ///
+    /// When updating an App ID, send only the keys you intend to change.
+    public let values: [String: PlistValue]
 
-    /// Whether iCloud is enabled.
-    public let iCloud: Bool?
-
-    /// Whether in-app purchase is enabled.
-    public let inAppPurchase: Bool?
-
-    /// Whether Game Center is enabled.
-    public let gameCenter: Bool?
-
-    /// Whether Wallet passes are enabled.
-    public let wallet: Bool?
-
-    /// Apple's default data-protection mode.
-    public let dataProtection: String?
-
-    /// Whether HomeKit is enabled.
-    public let homeKit: Bool?
-
-    /// Apple's CloudKit version value.
-    public let cloudKitVersion: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case pushNotifications = "push"
-        case iCloud
-        case inAppPurchase
-        case gameCenter
-        case wallet = "passbook"
-        case dataProtection
-        case homeKit
-        case cloudKitVersion
+    /// Whether push notifications are enabled, from the `push` key.
+    public var pushNotifications: Bool? {
+        values[PortalConstants.FeatureKey.push]?.boolean
     }
 
-    /// Creates legacy QH feature state.
+    /// Whether iCloud is enabled, from the `iCloud` key.
+    public var iCloud: Bool? {
+        values[PortalConstants.FeatureKey.iCloud]?.boolean
+    }
+
+    /// Whether in-app purchase is enabled, from the `inAppPurchase` key.
+    public var inAppPurchase: Bool? {
+        values[PortalConstants.FeatureKey.inAppPurchase]?.boolean
+    }
+
+    /// Whether Game Center is enabled, from the `gameCenter` key.
+    public var gameCenter: Bool? {
+        values[PortalConstants.FeatureKey.gameCenter]?.boolean
+    }
+
+    /// Whether Wallet passes are enabled, from the `passbook` key.
+    public var wallet: Bool? {
+        values[PortalConstants.FeatureKey.passbook]?.boolean
+    }
+
+    /// Apple's default data-protection mode, from the `dataProtection` key.
+    public var dataProtection: String? {
+        values[PortalConstants.FeatureKey.dataProtection]?.string
+    }
+
+    /// Whether HomeKit is enabled, from the `homeKit` key.
+    public var homeKit: Bool? {
+        values[PortalConstants.FeatureKey.homeKit]?.boolean
+    }
+
+    /// Apple's CloudKit version value, from the `cloudKitVersion` key.
+    public var cloudKitVersion: Int? {
+        values[PortalConstants.FeatureKey.cloudKitVersion]?.integer
+    }
+
+    /// Returns the raw value for a wire-format feature key, or `nil` when absent.
+    public subscript(key: String) -> PlistValue? {
+        values[key]
+    }
+
+    /// Creates feature state from raw wire-format keys and values.
+    public init(values: [String: PlistValue]) {
+        self.values = values
+    }
+
+    /// Creates feature state from typed values; `nil` arguments are omitted keys.
     public init(
         pushNotifications: Bool? = nil,
         iCloud: Bool? = nil,
@@ -236,14 +259,31 @@ public struct AppIDFeatures: Codable, Sendable {
         homeKit: Bool? = nil,
         cloudKitVersion: Int? = nil
     ) {
-        self.pushNotifications = pushNotifications
-        self.iCloud = iCloud
-        self.inAppPurchase = inAppPurchase
-        self.gameCenter = gameCenter
-        self.wallet = wallet
-        self.dataProtection = dataProtection
-        self.homeKit = homeKit
-        self.cloudKitVersion = cloudKitVersion
+        var values: [String: PlistValue] = [:]
+        values[PortalConstants.FeatureKey.push] = pushNotifications.map(PlistValue.boolean)
+        values[PortalConstants.FeatureKey.iCloud] = iCloud.map(PlistValue.boolean)
+        values[PortalConstants.FeatureKey.inAppPurchase] =
+            inAppPurchase.map(PlistValue.boolean)
+        values[PortalConstants.FeatureKey.gameCenter] = gameCenter.map(PlistValue.boolean)
+        values[PortalConstants.FeatureKey.passbook] = wallet.map(PlistValue.boolean)
+        values[PortalConstants.FeatureKey.dataProtection] =
+            dataProtection.map(PlistValue.string)
+        values[PortalConstants.FeatureKey.homeKit] = homeKit.map(PlistValue.boolean)
+        values[PortalConstants.FeatureKey.cloudKitVersion] =
+            cloudKitVersion.map(PlistValue.integer)
+        self.values = values
+    }
+
+    /// Decodes the entire feature dictionary without dropping unknown keys.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        values = try container.decode([String: PlistValue].self)
+    }
+
+    /// Encodes the feature dictionary exactly as it was received.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(values)
     }
 }
 
